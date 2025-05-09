@@ -15,7 +15,11 @@ from foxglove_websocket.server import FoxgloveServer, FoxgloveServerListener
 from foxglove_websocket.types import ChannelId
 from mcap_protobuf.writer import Writer
 import math  # TODO remove
+import busio
+import digitalio
+import adafruit_rfm9x
 import cv2
+import board
 
 # import custom protobuf schema
 from tom_packet_pb2 import TomPacket, TwoStageState  
@@ -35,7 +39,7 @@ except ImportError as err:
 # add arguments for command line interface
 parser = argparse.ArgumentParser(
     prog="protobuf_server",
-    description="A ground station for TOM flight boards",
+    description="A ground station for TOM flight s",
     epilog="text at the bottom of help",
 )
 
@@ -63,8 +67,8 @@ parser.add_argument("--tx_pwr", default=13)
 parser.add_argument("--spi_sck", default="SCK")
 parser.add_argument("--spi_mosi", default="MOSI")
 parser.add_argument("--spi_miso", default="MISO")
-parser.add_argument("--spi_cs", default="D5")
-parser.add_argument("--spi_reset", default="D25")
+parser.add_argument("--spi_cs", default="CE1")
+parser.add_argument("--spi_reset", default="D27")
 
 args = parser.parse_args()
 
@@ -129,27 +133,32 @@ async def main():
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             print("Error: Could not open camera")
-            sys.exit(1)
 
         # Initialize SPI and LoRa radio using parameters for GPIO pins
-        spi = busio.SPI(getattr(board, spi_sck), MOSI=getattr(board, spi_mosi), MISO=getattr(board, spi_miso))
-        cs = digitalio.DigitalInOut(getattr(board, spi_cs))
-        reset = digitalio.DigitalInOut(getattr(board, spi_reset))
-        rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, 915.0)
-        rfm9x.tx_power = tx_pwr
-        rfm9x.node = node_id
-        rfm9x.destination = dest_id
+        _frequency = 915
+        _preamble_length = 8
+        _bandwidth = 250_000
+        _spreading_factor = 10
 
-        print(f"Initialized radio (SPI:[CK:{spi_sck} MO:{spi_mosi} MI:{spi_miso}] CS:{spi_cs} RST:{spi_reset} PWR:{tx_pwr} NODE:{node_id} DST:{dest_id}")
+        spi = busio.SPI(getattr(board, args.spi_sck), MOSI=getattr(board, args.spi_mosi), MISO=getattr(board, args.spi_miso))
+        cs = digitalio.DigitalInOut(getattr(board, args.spi_cs))
+        reset = digitalio.DigitalInOut(getattr(board, args.spi_reset))
+        rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, _frequency)
+        rfm9x.tx_power = args.tx_pwr
+        rfm9x.node = args.node_id
+        rfm9x.destination = args.dest_id
+        rfm9x.preamble_length = _preamble_length
+        rfm9x.signal_bandwidth = _bandwidth
+        rfm9x.spreading_factor = _spreading_factor
 
-
+        print(f"Initialized radio (SPI:[CK:{args.spi_sck} MO:{args.spi_mosi} MI:{args.spi_miso}] CS:{args.spi_cs} RST:{args.spi_reset} PWR:{args.tx_pwr} NODE:{args.node_id} DST:{args.dest_id}")
 
         # TODO figure out how to make logging optional
         # if args.enable_logging:
         #     mcap_writer = Writer(open("log.mcap", "wb"))
         # else:
         #     mcap_writer = None
-        async with open("log.mcap", "wb") as f, Writer(f) as mcap_writer:
+        with open("log.mcap", "wb") as f, Writer(f) as mcap_writer:
             state = TwoStageState.MAXQ
             i = 0
             while True:
@@ -159,35 +168,38 @@ async def main():
 
                 # TELEMETRY PUBLISHER
                 # Send a custom message
-                tom_packet = TomPacket()
-                tom_packet.latitude = 10
-                tom_packet.longitude = 20
-                tom_packet.altitude = math.sin(i / 100)
+                if rfm9x.rx_done:
+                    packet = rfm9x.receive()  # packet is a bytearray
+                    if packet is not None:
 
-                if i % 20 == 0:
-                    state += 1
-                    if state > 4:
-                        state = 0
-                tom_packet.state = state
+                        tom_packet = TomPacket()
+                        tom_packet.ParseFromString(packet)
+                        print(f"{tom_packet.latitude=}")
+                        print(f"{tom_packet.longitude=}")
+                        print(f"{tom_packet.altitude=}")
+                        print(f"{tom_packet.state=}")
+                        print("...................................")
 
-                await server.send_message(
-                    telemetry_channel_id, now, tom_packet.SerializeToString()
-                )
+                        await server.send_message(
+                            telemetry_channel_id, now, tom_packet.SerializeToString()
+                        )
 
-                if not mcap_writer is None:
-                    mcap_writer.write_message(
-                        topic="telemetry",
-                        message=tom_packet,
-                        log_time=now,
-                        publish_time=now,
-                    )
+                        if not mcap_writer is None:
+                            mcap_writer.write_message(
+                                topic="telemetry",
+                                message=tom_packet,
+                                log_time=now,
+                                publish_time=now,
+                            )
+
 
                 # CAMERA PUBLISHER
+                continue
                 ret, frame = cap.read()
 
                 if not ret:
-                    print("Error: Can't receive frame")
-                    break
+                    # print("Error: Can't receive frame")
+                    continue
 
                 im_packet = CompressedImage()
                 im_packet.timestamp.FromNanoseconds(now)

@@ -4,8 +4,8 @@ import board
 import busio
 import digitalio
 import adafruit_rfm9x
+import time
 
-from rclpy.serialization import serialize_message, deserialize_message
 
 def main():
 	# Declare parameters
@@ -32,23 +32,9 @@ def main():
 
 	# Create subscription and publisher for each topic with appropriate message type
 	# TODO call in loop
-	lora_rx_callback(rfm9x)
-
-def sub_callback( msg, topic_name):
-	# Serialize the message
-	serialized_msg = serialize_message(msg)
-
-	# Concatenate topic name and serialized message
-	# Use a delimiter to separate the topic name and the serialized message
-	delimiter = b'|'
-	payload = topic_name.encode() + delimiter + serialized_msg
-
-	# Compress the payload
-	compressed_payload = gzip.compress(payload)
-
-	if compressed_payload:
-		get_logger().debug(f"Sending [{topic_name}]: {msg}")
-		rfm9x.send(compressed_payload, keep_listening=True)
+	while True:
+		lora_rx_callback(rfm9x)
+		time.sleep(0.05)
 
 def lora_rx_callback(rfm9x):
 	if rfm9x.rx_done:
