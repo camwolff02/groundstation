@@ -1,4 +1,1 @@
-# Run the following commands before running
-sudo apt update
-sudo apt install libgl1
-uv init
+run ./setup.sh, and `sudo raspi-config` to enable spi before running

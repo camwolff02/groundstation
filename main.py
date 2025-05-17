@@ -8,9 +8,9 @@ import argparse
 import os
 import sys
 import time
+from datetime import datetime
 
 # External library imports for gpio, lora, foxglove, logging, etc.
-from adafruit_rfm9x import RFM9x
 from base64 import b64encode
 import board
 import busio
@@ -22,6 +22,7 @@ from foxglove_websocket.types import ChannelId
 from mcap_protobuf.writer import Writer
 from traceback import print_exception
 from typing import Set, Type
+from adafruit_rfm9x import RFM9x
 
 # Local imports for custom protobuf schema
 from tom_packet_pb2 import TomPacket
@@ -120,7 +121,7 @@ async def run_telemetry_loop(
             if packet is not None:
                 tom_packet = TomPacket()
                 tom_packet.ParseFromString(packet)
-
+ 
                 await server.send_message(
                     telemetry_channel_id, now, tom_packet.SerializeToString()
                 )
@@ -178,10 +179,10 @@ async def main() -> None:
                 "topic": "telemetry",
                 "encoding": "protobuf",
                 "schemaName": TomPacket.DESCRIPTOR.full_name,
+                "schemaEncoding": "protobuf",
                 "schema": b64encode(
                     build_file_descriptor_set(TomPacket).SerializeToString()
                 ).decode("ascii"),
-                "schemaEncoding": "protobuf",
             }
         )
 
@@ -215,26 +216,31 @@ async def main() -> None:
 
         print(
             f"""[INFO] Initialized radio with parameters:
-            SPI:[CK:{args.spi_sck} MO:{args.spi_mosi} MI:{args.spi_miso}]
-            CS:{args.spi_cs}
-            RST:{args.spi_reset}
-            PWR:{args.tx_pwr}
-            NODE:{args.node_id}
-            DST:{args.dest_id}
-            PRE:{args.preamble_length}
-            BAND:{args.bandwidth}
-            SPREAD:{args.spreading_factor}"""
+        SPI:[CK:{args.spi_sck} MO:{args.spi_mosi} MI:{args.spi_miso}]
+        CS:{args.spi_cs}
+        RST:{args.spi_reset}
+        PWR:{args.tx_pwr}
+        NODE:{args.node_id}
+        DST:{args.dest_id}
+        PRE:{args.preamble_length}
+        BAND:{args.bandwidth}
+        SPREAD:{args.spreading_factor}"""
         )
 
         # Set up camera feed to read
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            print("[ERROR] Could not open camera")
+        if args.enable_camera:
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                print("[ERROR] Could not open camera")
+                cap = None
+            else:
+                print("[INFO] Initialized Video Camera")
+        else:
+            cap = None
 
         # Run the main RX Loop
         if args.enable_logging:
             # Create logs directory if it doesn't exist
-            from datetime import datetime
 
             os.makedirs(args.log_dir, exist_ok=True)
 
@@ -254,9 +260,59 @@ async def main() -> None:
                     mcap_writer,
                 )
         else:
-            await run_telemetry_loop(
-                rfm9x, server, telemetry_channel_id, camera_channel_id, cap
-            )
+            mcap_writer = None
+            while True:
+                now = time.time_ns()
+
+                # Radio Publisher
+                if rfm9x.rx_done:
+                    packet = rfm9x.receive()  # packet is a bytearray
+
+                    if packet is not None:
+                        print(packet.hex())
+                        tom_packet = TomPacket()
+                        # tom_packet.ParseFromString(packet)
+        # 
+                        await server.send_message(
+                            telemetry_channel_id, now, tom_packet.SerializeToString()
+                        )
+
+                        if mcap_writer is not None:
+                            mcap_writer.write_message(
+                                topic="telemetry",
+                                message=tom_packet,
+                                log_time=now,
+                                publish_time=now,
+                            )
+
+                # Camera Publisher
+                if cap is not None:
+                    ret, frame = cap.read()
+
+                    if not ret:
+                        print("[ERROR] Can't receive frame")
+                        continue
+
+                    im_packet = CompressedImage()
+                    im_packet.timestamp.FromNanoseconds(now)
+                    im_packet.data = cv2.imencode(".jpeg", frame)[1].tobytes()
+                    im_packet.format = "jpeg"
+                    await server.send_message(
+                        camera_channel_id, now, im_packet.SerializeToString()
+                    )
+
+                    if mcap_writer is not None:
+                        try:
+                            mcap_writer.write_message(
+                                topic="camera/image_compressed",
+                                message=im_packet,
+                                log_time=now,
+                                publish_time=now,
+                            )
+                        except OSError as err:
+                            print(f"[ERROR] Can't log data: {err}")
+
+
 
 
 if __name__ == "__main__":
