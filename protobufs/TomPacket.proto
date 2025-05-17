@@ -6,11 +6,8 @@ import "ForteState.proto";
 import "LocationFix.proto";
 
 message TomPacket {
-    string id = 1;
-    int64 latitude = 2;  // [nano degrees]
-    int64 longitude = 3;  // [nano degrees]
-    double altitude = 4;  // [meters]
-    foxglove.LocationFix location = 5;
-    cpss.forte.State state = 6;
+    string rocket_id = 1;
+    foxglove.LocationFix location = 2;
+    cpss.forte.State state = 3;
 }
 

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package cpss;
+
+message Altimeter {
+    double altitude = 1;  // [meters]
+}
+
+message IMU {
+    double acc_x = 1;  // [g]
+    double acc_y = 2;  // [g]
+    double acc_z = 3;  // [g]
+    double gyr_x = 4;  // [degrees/s]
+    double gyr_y = 5;  // [degrees/s]
+    double gyr_z = 6;  // [degrees/s]
+}
+
+message GNSS {
+    int64 latitude = 1;  // [nano degrees]
+    int64 longitude = 2;  // [nano degrees]
+    int32 satellites = 3;  // [count]
+}
+
+message Magnetometer {
+    double x = 1;  // [gauss]
+    double y = 2;  // [gauss]
+    double z = 3;  // [gauss]
+}

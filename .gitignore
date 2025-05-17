@@ -20,3 +20,5 @@ wheels/
 
 # Logging
 *.mcap
+*.csv
+*.log

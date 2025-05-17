@@ -19,7 +19,8 @@ from LoRaRF import SX127x
 
 # Local imports for custom protobuf schema and CLI
 from cli import parser
-from TomPacket_pb2 import TomPacket
+# from TomPacket_pb2 import TomPacket
+from tom_packet_pb2 import TomPacket  # using old protobuf for cert launch
 from utils import build_file_descriptor_set, CustomListener
 
 
@@ -31,20 +32,28 @@ def run_telemetry_loop(
         cap: cv2.VideoCapture | None = None,
 ) -> None:
     try:
+        # tom_packet_size = len(TomPacket().SerializeToString())
+
         while True:
             # Get data from LoRa
             lora.request()
-            lora.wait()
+            print("waiting")
 
-            byte_str = b""
-            while lora.available() > 0:
-                byte = lora.read()
-                byte_str += bytes(byte)
+            if lora.wait(timeout=10.0):
+                # while lora.available() > tom_packet_size:
+                #     telemetry_channel.log(lora.read(tom_packet_size))
 
-            if len(byte_str) > 0:
-                telemetry_channel.log(byte_str)
-            else:
-                print("[ERROR] Packet received with no bytes")
+                print("collecting")
+                bytestr = b""
+
+                while lora.available() > 0:
+                    bytestr += bytes(lora.read())
+
+                if len(bytestr) > 0:
+                    print(bytestr)
+                    telemetry_channel.log(bytestr)
+                else:
+                    print("failed!")
 
             # Get data from Camera
             if cap is not None:

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package cpss;
+
+import "Sensor.proto";
+
+message NavPacket {
+    GNSS gnss = 1;
+    IMU imu0 = 2;
+    Altimeter alt0 = 3;
+    Magnetometer magn = 4;
+    Altimeter alt1 = 5;
+    Altimeter alt2 = 6;
+    IMU imu1 = 7;
+    IMU imu2 = 8;
+}
