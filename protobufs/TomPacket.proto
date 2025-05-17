@@ -2,17 +2,15 @@ syntax = "proto3";
 
 package cpss;
 
+import "ForteState.proto";
+import "LocationFix.proto";
+
 message TomPacket {
-    TwoStageState state = 1;
+    string id = 1;
     int64 latitude = 2;  // [nano degrees]
     int64 longitude = 3;  // [nano degrees]
     double altitude = 4;  // [meters]
+    foxglove.LocationFix location = 5;
+    cpss.forte.State state = 6;
 }
 
-enum TwoStageState {
-    IDLE = 0;
-    READY = 1;
-    LIFTOFF = 2;
-    MAXQ = 3;
-    BURNOUT = 4;
-}

@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Protobuf generated files
+*_pb2.py
+
 # Virtual environments
 .venv
 
@@ -14,3 +17,6 @@ wheels/
 
 # MacOS
 .DS_Store
+
+# Logging
+*.mcap
