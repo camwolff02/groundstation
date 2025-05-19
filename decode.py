@@ -34,6 +34,8 @@ def main() -> None:
     ):
         writer = csv.writer(csvfile)
         writer.writerow([
+            "timestamp.seconds",
+            "timestamp.nanos",
             "gnss.latitude",
             "gnss.longitude",
             "gnss.satellites",
@@ -68,6 +70,8 @@ def main() -> None:
 
             nav_channel.log(packet.SerializeToString())
             writer.writerow([
+                packet.timestamp.seconds,
+                packet.timestamp.nanos,
                 packet.gnss.latitude,
                 packet.gnss.longitude,
                 packet.gnss.satellites,
