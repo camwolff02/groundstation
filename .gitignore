@@ -22,3 +22,6 @@ wheels/
 *.mcap
 *.csv
 *.log
+
+#locks
+uv.lock

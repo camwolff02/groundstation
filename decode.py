@@ -65,10 +65,16 @@ def main() -> None:
             "magn.z",
         ])
         for line in file.readlines():
-            packet = NavPacket()
-            packet.ParseFromString(b64decode(line))
+            if len(line.strip()) == 0 or line.startswith("#"):
+                continue
 
-            nav_channel.log(packet.SerializeToString())
+            packet = NavPacket()
+            try:
+                packet.ParseFromString(b64decode(line))
+            except Exception as e:
+                continue
+
+            nav_channel.log(packet.SerializeToString(), log_time=int(packet.timestamp.seconds * 1e9 + packet.timestamp.nanos))
             writer.writerow([
                 packet.timestamp.seconds,
                 packet.timestamp.nanos,
