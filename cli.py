@@ -36,11 +36,11 @@ parser.add_argument(
 )
 
 # Arguments for radio
-parser.add_argument("--spi_bus", default=0)
-parser.add_argument("--spi_cs", default=0)
+parser.add_argument("--spi_bus", default=0, help="Which SPI Bus you're using")
+parser.add_argument("--spi_cs", default=1, help="Chip select")
 parser.add_argument("--spi_speed", default=1_000_000)
 parser.add_argument("--pins_reset", default=27)
-parser.add_argument("--pins_irq", default=17)
+parser.add_argument("--pins_irq", default=17, help="Interrupt Request Pin")
 parser.add_argument("--frequency", default=915_000_000)
 parser.add_argument("--modulation_sf", default=10)
 parser.add_argument("--modulation_bw", default=500_000, help="Bandwidth")

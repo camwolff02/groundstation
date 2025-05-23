@@ -6,4 +6,5 @@ uv sync
 cd protobufs
 protoc *.proto --python_out=..
 cd ..
+cp .vimrc ~/.vimrc
 sudo apt-get full-upgrade

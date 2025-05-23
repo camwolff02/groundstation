@@ -25,7 +25,7 @@ from utils import build_file_descriptor_set, CustomListener
 
 
 def run_telemetry_loop(
-        lora: SX127x,
+		lora: SX127x,
         server: WebSocketServer,
         telemetry_channel: Channel,
         image_channel: CompressedImageChannel,
@@ -102,23 +102,29 @@ def main() -> None:
     # INITIALIZE IO RESOURCES
     # LoRa Wiring settings
     lora = SX127x()
-    lora.setSpi(args.spi_bus, args.spi_cs, args.spi_speed)
-    lora.setPins(reset=args.pins_reset, irq=args.pins_irq)
-    lora.begin()
+    try:
+        lora.setSpi(args.spi_bus, args.spi_cs, args.spi_speed)
+        lora.setPins(reset=args.pins_reset, irq=args.pins_irq)
+        lora.begin()
 
-    # LoRa packet settings
-    lora.setModem(SX127x.LORA_MODEM)
-    lora.setFrequency(args.frequency)
-    lora.setLoRaModulation(
-        sf=args.modulation_sf,
-        bw=args.modulation_bw,
-        cr=args.modulation_cr,
-    )
-    lora.setPreambleLength(args.preamble_len)
-    lora.setSyncWord(args.sync_word)
-    lora.setRxGain(True, lora.RX_GAIN_BOOSTED)
+        # LoRa packet settings
+        lora.setModem(SX127x.LORA_MODEM)
+        lora.setFrequency(args.frequency)
+        lora.setLoRaModulation(
+            sf=args.modulation_sf,
+            bw=args.modulation_bw,
+            cr=args.modulation_cr,
+        )
+        lora.setPreambleLength(args.preamble_len)
+        lora.setSyncWord(args.sync_word)
+        lora.setRxGain(True, lora.RX_GAIN_BOOSTED)
+    except OSError as e:
+        print(e)
+        print("[ERROR] No LoRa detected! Likely SPI is not enabled")
+        server.stop()
+        exit(1)
 
-    print('[INFO] LoRa initialized')
+    print("[INFO] LoRa initialized")
 
     # Video capture initialization
     if args.enable_camera:
