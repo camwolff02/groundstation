@@ -15,53 +15,51 @@ from foxglove.websocket import (
 from foxglove.schemas import (
     CompressedImage,
 )
-from LoRaRF import SX127x
+import google.protobuf.message
+import board
+import busio
+import digitalio
+from adafruit_rfm9x import RFM9x
 
 # Local imports for custom protobuf schema and CLI
 from cli import parser
 from TomPacket_pb2 import TomPacket
-# from tom_packet_pb2 import TomPacket  # using old protobuf for cert launch
+from LocationFix_pb2 import LocationFix
+
 from utils import build_file_descriptor_set, CustomListener
 
 
 def run_telemetry_loop(
-		lora: SX127x,
-        server: WebSocketServer,
-        telemetry_channel: Channel,
-        image_channel: CompressedImageChannel,
-        cap: cv2.VideoCapture | None = None,
+    lora: RFM9x,
+    server: WebSocketServer,
+    telemetry_channel: Channel,
+    location_channel: Channel,
+    image_channel: CompressedImageChannel | None = None,
+    cap: cv2.VideoCapture | None = None,
 ) -> None:
     try:
-        # tom_packet_size = len(TomPacket().SerializeToString())
-
         while True:
             # Get data from LoRa
-            lora.request()
-            print("waiting")
+            packet = lora.receive(with_header=True)
 
-            if lora.wait(timeout=10.0):
-                # while lora.available() > tom_packet_size:
-                #     telemetry_channel.log(lora.read(tom_packet_size))
-
-                print("collecting")
-                bytestr = b""
-
-                while lora.available() > 0:
-                    bytestr += bytes(lora.read())
-
-                if len(bytestr) > 0:
-                    print(bytestr)
-                    telemetry_channel.log(bytestr)
-                else:
-                    print("failed!")
+            if packet is not None:
+                print(bytes(packet))
+                try:
+                    tom_packet = TomPacket()
+                    tom_packet.ParseFromString(packet)
+                    location_channel.log(tom_packet.location.SerializeToString())
+                    telemetry_channel.log(bytes(packet))
+                except google.protobuf.message.DecodeError:
+                    print(
+                        "[ERROR] Could not decode packet! Did flight computer shut off?"
+                    )
 
             # Get data from Camera
-            if cap is not None:
+            if cap is not None and image_channel is not None:
                 ret, frame = cap.read()
                 if ret:
                     im_packet = CompressedImage(
-                        data=cv2.imencode(".jpeg", frame)[1].tobytes(),
-                        format="jpeg"
+                        data=cv2.imencode(".jpeg", frame)[1].tobytes(), format="jpeg"
                     )
                     image_channel.log(im_packet)
 
@@ -84,7 +82,7 @@ def main() -> None:
         port=args.port,
         server_listener=listener,
         capabilities=[Capability.ClientPublish],
-        supported_encodings=["json", "protobuf"]
+        supported_encodings=["json", "protobuf"],
     )
 
     telemetry_channel = Channel(
@@ -94,35 +92,41 @@ def main() -> None:
             name=TomPacket.DESCRIPTOR.full_name,
             encoding="protobuf",
             data=build_file_descriptor_set(TomPacket).SerializeToString(),
-        )
+        ),
     )
 
-    image_channel = CompressedImageChannel(topic="/camera/image_compressed")
+    location_channel = Channel(
+        topic="/location",
+        message_encoding="protobuf",
+        schema=Schema(
+            name=LocationFix.DESCRIPTOR.full_name,
+            encoding="protobuf",
+            data=build_file_descriptor_set(LocationFix).SerializeToString(),
+        ),
+    )
+
+    if args.enable_camera:
+        image_channel = CompressedImageChannel(topic="/camera/image_compressed")
+    else:
+        image_channel = None
 
     # INITIALIZE IO RESOURCES
     # LoRa Wiring settings
-    lora = SX127x()
-    try:
-        lora.setSpi(args.spi_bus, args.spi_cs, args.spi_speed)
-        lora.setPins(reset=args.pins_reset, irq=args.pins_irq)
-        lora.begin()
+    spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
-        # LoRa packet settings
-        lora.setModem(SX127x.LORA_MODEM)
-        lora.setFrequency(args.frequency)
-        lora.setLoRaModulation(
-            sf=args.modulation_sf,
-            bw=args.modulation_bw,
-            cr=args.modulation_cr,
-        )
-        lora.setPreambleLength(args.preamble_len)
-        lora.setSyncWord(args.sync_word)
-        lora.setRxGain(True, lora.RX_GAIN_BOOSTED)
-    except OSError as e:
-        print(e)
-        print("[ERROR] No LoRa detected! Likely SPI is not enabled")
-        server.stop()
-        exit(1)
+    # Setup Chip Select and Reset pins
+    cs = digitalio.DigitalInOut(getattr(board, f"CE{args.spi_cs}"))
+    reset = digitalio.DigitalInOut(getattr(board, f"D{args.pins_reset}"))
+
+    # Initialize RFM9x
+    lora = RFM9x(spi, cs, reset, args.frequency / 1_000_000)
+
+    # Apply modulation settings
+    lora.signal_bandwidth = args.modulation_bw
+    lora.spreading_factor = args.modulation_sf
+    lora.coding_rate = args.modulation_cr
+    lora.preamble_length = args.preamble_len
+    lora.sync_word = args.sync_word
 
     print("[INFO] LoRa initialized")
 
@@ -132,6 +136,7 @@ def main() -> None:
         if not cap.isOpened():
             print("[ERROR] Could not open camera")
             cap = None
+            image_channel = None
         else:
             print("[INFO] Initialized Video Camera")
     else:
@@ -143,27 +148,17 @@ def main() -> None:
 
         # Create filename with current datetime
         timestamp = datetime.now().strftime("%Y:%m:%d-%H:%M:%S")
-        path = os.path.join(
-            args.log_dir, f"{args.rocket_name}-{timestamp}.mcap"
-        )
+        path = os.path.join(args.log_dir, f"{args.rocket_name}-{timestamp}.mcap")
 
         with foxglove.open_mcap(path):
             run_telemetry_loop(
-                lora,
-                server,
-                telemetry_channel,
-                image_channel,
-                cap
+                lora, server, telemetry_channel, location_channel, image_channel, cap
             )
     else:
         run_telemetry_loop(
-            lora,
-            server,
-            telemetry_channel,
-            image_channel,
-            cap
+            lora, server, telemetry_channel, location_channel, image_channel, cap
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

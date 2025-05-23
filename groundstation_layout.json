@@ -1,0 +1,107 @@
+{
+  "configById": {
+    "Image!3d0xeo": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/camera/image_compressed"
+      }
+    },
+    "StateTransitions!1qu7tr5": {
+      "paths": [
+        {
+          "value": "/telemetry.state",
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "isSynced": true
+    },
+    "map!4ewo5m8": {
+      "customTileUrl": "",
+      "disabledTopics": [],
+      "followTopic": "",
+      "layer": "map",
+      "topicColors": {},
+      "zoomLevel": 10,
+      "maxNativeZoom": 18,
+      "topicConfig": {}
+    },
+    "Plot!3lm2vjo": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/telemetry.location.altitude",
+          "enabled": true,
+          "color": "#4e98e2"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    }
+  },
+  "globalVariables": {
+    "globalVariable": 7
+  },
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "first": "Image!3d0xeo",
+      "second": "map!4ewo5m8",
+      "direction": "column"
+    },
+    "second": {
+      "first": "StateTransitions!1qu7tr5",
+      "second": "Plot!3lm2vjo",
+      "direction": "column",
+      "splitPercentage": 15.337423312883436
+    },
+    "splitPercentage": 33.277870216306155
+  }
+}

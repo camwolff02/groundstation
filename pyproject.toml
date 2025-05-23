@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "adafruit-blinka>=8.58.1",
+    "adafruit-circuitpython-rfm9x>=2.2.19",
     "foxglove-sdk>=0.7.1",
-    "lorarf>=1.4.0",
     "mcap>=1.2.2",
     "mcap-protobuf-support>=0.5.3",
     "opencv-python>=4.11.0.86",
+    "rpi-gpio>=0.7.1",
 ]
