@@ -19,8 +19,8 @@ from LoRaRF import SX127x
 
 # Local imports for custom protobuf schema and CLI
 from cli import parser
-# from TomPacket_pb2 import TomPacket
-from tom_packet_pb2 import TomPacket  # using old protobuf for cert launch
+from TomPacket_pb2 import TomPacket
+# from tom_packet_pb2 import TomPacket  # using old protobuf for cert launch
 from utils import build_file_descriptor_set, CustomListener
 
 
