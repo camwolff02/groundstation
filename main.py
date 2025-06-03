@@ -25,6 +25,7 @@ from adafruit_rfm9x import RFM9x
 from cli import parser
 from TomPacket_pb2 import TomPacket
 from LocationFix_pb2 import LocationFix
+from Signal_pb2 import Signal
 
 from utils import build_file_descriptor_set, CustomListener
 
@@ -32,11 +33,44 @@ from utils import build_file_descriptor_set, CustomListener
 def run_telemetry_loop(
     lora: RFM9x,
     server: WebSocketServer,
-    telemetry_channel: Channel,
-    location_channel: Channel,
     image_channel: CompressedImageChannel | None = None,
     cap: cv2.VideoCapture | None = None,
+    rocket_ids: list[str] = [],
 ) -> None:
+    # Create a dictionary to store channels for each rocket
+    rocket_channels = {
+        rocket_id: {
+            "telemetry": Channel(
+                topic=f"/telemetry/{rocket_id}",
+                message_encoding="protobuf",
+                schema=Schema(
+                    name=TomPacket.DESCRIPTOR.full_name,
+                    encoding="protobuf",
+                    data=build_file_descriptor_set(TomPacket).SerializeToString(),
+                ),
+            ),
+            "location": Channel(
+                topic=f"/location/{rocket_id}",
+                message_encoding="protobuf",
+                schema=Schema(
+                    name=LocationFix.DESCRIPTOR.full_name,
+                    encoding="protobuf",
+                    data=build_file_descriptor_set(LocationFix).SerializeToString(),
+                ),
+            ),
+            "signal": Channel(
+                topic=f"/signal/{rocket_id}",
+                message_encoding="protobuf",
+                schema=Schema(
+                    name=Signal.DESCRIPTOR.full_name,
+                    encoding="protobuf",
+                    data=build_file_descriptor_set(Signal).SerializeToString(),
+                ),
+            ),
+        }
+        for rocket_id in rocket_ids
+    }
+
     try:
         while True:
             # Get data from LoRa
@@ -47,8 +81,26 @@ def run_telemetry_loop(
                 try:
                     tom_packet = TomPacket()
                     tom_packet.ParseFromString(packet)
-                    location_channel.log(tom_packet.location.SerializeToString())
-                    telemetry_channel.log(bytes(packet))
+
+                    if tom_packet.rocket_id not in rocket_channels:
+                        continue
+
+                    if abs(tom_packet.location.altitude) > 1_000_000:
+                        continue
+
+                    # Get the channels for the specific rocket
+                    channels = rocket_channels[tom_packet.rocket_id]
+
+                    # Publish location data to the rocket's location channel
+                    if tom_packet.HasField("location"):
+                        channels["location"].log(tom_packet.location.SerializeToString())
+
+                    # Publish telemetry data to the rocket's telemetry channel
+                    channels["telemetry"].log(bytes(packet))
+
+                    # Publish signal data to the rocket's signal channel
+                    signal_data = Signal(rssi=lora.last_rssi, snr=lora.last_snr)
+                    channels["signal"].log(signal_data.SerializeToString())
                 except google.protobuf.message.DecodeError:
                     print(
                         "[ERROR] Could not decode packet! Did flight computer shut off?"
@@ -105,6 +157,16 @@ def main() -> None:
         ),
     )
 
+    signal_channel = Channel(
+        topic="/signal",
+        message_encoding="protobuf",
+        schema=Schema(
+            name=Signal.DESCRIPTOR.full_name,
+            encoding="protobuf",
+            data=build_file_descriptor_set(Signal).SerializeToString(),
+        ),
+    )
+
     if args.enable_camera:
         image_channel = CompressedImageChannel(topic="/camera/image_compressed")
     else:
@@ -142,6 +204,8 @@ def main() -> None:
     else:
         cap = None
 
+    rocket_ids = args.rocket_name.split(',')
+
     if args.enable_logging:
         # Create logs directory if it doesn't exist
         os.makedirs(args.log_dir, exist_ok=True)
@@ -152,11 +216,11 @@ def main() -> None:
 
         with foxglove.open_mcap(path):
             run_telemetry_loop(
-                lora, server, telemetry_channel, location_channel, image_channel, cap
+                lora, server, image_channel, cap, rocket_ids
             )
     else:
         run_telemetry_loop(
-            lora, server, telemetry_channel, location_channel, image_channel, cap
+            lora, server, image_channel, cap, rocket_ids
         )
 
 
