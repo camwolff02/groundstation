@@ -7,9 +7,10 @@ requires-python = ">=3.10"
 dependencies = [
     "adafruit-blinka>=8.58.1",
     "adafruit-circuitpython-rfm9x>=2.2.19",
-    "foxglove-sdk>=0.7.1",
+    "foxglove-sdk>=0.7.1", # TODO update
     "mcap>=1.2.2",
     "mcap-protobuf-support>=0.5.3",
     "opencv-python>=4.11.0.86",
+    "polars>=1.30.0",
     "rpi-gpio>=0.7.1",
 ]
