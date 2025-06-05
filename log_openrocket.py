@@ -1,8 +1,10 @@
 import polars as pl
+from base64 import b64encode
 import argparse
 import numpy as np
 
 from NavPacket_pb2 import NavPacket
+
 
 parser = argparse.ArgumentParser(description="Process OpenRocket CSV data with optional noise.")
 parser.add_argument(
@@ -13,7 +15,7 @@ parser.add_argument(
     help="Path to the OpenRocket CSV file. Default is 'forte_openrocket.csv'."
 )
 parser.add_argument(
-    "-n",
+    "-a",
     "--add-noise",
     action="store_true",
     help="Add random noise to the data to simulate real sensor readings."
@@ -24,6 +26,12 @@ parser.add_argument(
     type=float,
     default=0.05,
     help="Standard deviation of the noise to be added. Default is 0.05."
+)
+parser.add_argument(
+    "-l",
+    "--log-file",
+    type=str,
+    default="openrocket.log",
 )
 
 
@@ -50,11 +58,12 @@ def main() -> None:
     print("OpenRocket DataFrame:")
     print(df.head())
 
-    # Create NavPacket for each row in the DataFrame
-    nav_packets: list[NavPacket] = [create_nav_packet(packet) for packet in df.iter_rows()]
-
-    # Example: Print the first NavPacket
-    print(nav_packets[0])
+    # Write all encoded packets to the logfile
+    with open(args.log_file, "wb") as logfile:
+        for packet_tuple in df.iter_rows():
+            packet = create_nav_packet(packet_tuple)
+            encoded = b64encode(packet.SerializeToString()) + b"\n"
+            logfile.write(encoded)
 
 
 def create_nav_packet(row: tuple[float, float, float, float]) -> NavPacket:
