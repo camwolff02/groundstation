@@ -1,0 +1,249 @@
+{
+  "configById": {
+    "RawMessages!1n3j629": {
+      "diffEnabled": false,
+      "diffMethod": "previous message",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/location/B",
+      "fontSize": 12
+    },
+    "Indicator!241lfwg": {
+      "path": "/telemetry/B.state_packet.logging",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#ff0000",
+      "fallbackLabel": "False",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "true",
+          "color": "#68e24a",
+          "label": "True"
+        }
+      ]
+    },
+    "Gauge!7m2uj6": {
+      "path": "/signal/B.rssi",
+      "minValue": -180,
+      "maxValue": -40,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false
+    },
+    "Gauge!1wy0071": {
+      "path": "/signal/B.snr",
+      "minValue": -20,
+      "maxValue": 10,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false
+    },
+    "Gauge!233tm0n": {
+      "path": "/signal/C.rssi",
+      "minValue": -180,
+      "maxValue": -40,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false,
+      "foxglovePanelTitle": ""
+    },
+    "Gauge!2fwdvoy": {
+      "path": "/signal/C.snr",
+      "minValue": -20,
+      "maxValue": 10,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false,
+      "foxglovePanelTitle": ""
+    },
+    "Indicator!2z7d1q": {
+      "path": "/telemetry/C.state_packet.logging",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#ff0000",
+      "fallbackLabel": "False",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "true",
+          "color": "#68e24a",
+          "label": "True"
+        }
+      ]
+    },
+    "RawMessages!mbh5zq": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/location/C",
+      "fontSize": 12
+    },
+    "map!4ewo5m8": {
+      "customTileUrl": "",
+      "disabledTopics": [],
+      "followTopic": "/location/C",
+      "layer": "map",
+      "topicColors": {},
+      "zoomLevel": 11,
+      "maxNativeZoom": 18,
+      "topicConfig": {
+        "/location": {
+          "pointDisplayMode": "pin",
+          "historyMode": "all"
+        },
+        "/location/B": {
+          "pointDisplayMode": "dot",
+          "historyMode": "all"
+        },
+        "/location/C": {
+          "pointDisplayMode": "dot",
+          "historyMode": "all"
+        }
+      },
+      "center": {
+        "lat": 0,
+        "lon": 0
+      }
+    },
+    "StateTransitions!1qu7tr5": {
+      "paths": [
+        {
+          "value": "/telemetry/B.state_packet.state",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        },
+        {
+          "value": "/telemetry/B.state_packet.pyro_slot",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        },
+        {
+          "value": "/telemetry/C.state_packet.state",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "isSynced": true,
+      "showPoints": false
+    },
+    "Indicator!1fvr8r2": {
+      "path": "",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#68e24a",
+      "fallbackLabel": "Unarmed",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "true",
+          "color": "#68e24a",
+          "label": "Armed"
+        }
+      ],
+      "foxglovePanelTitle": "Armed"
+    },
+    "Plot!3lm2vjo": {
+      "paths": [
+        {
+          "value": "/telemetry/B.location.altitude",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "color": "#f5774d"
+        },
+        {
+          "value": "/telemetry/C.location.altitude",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "color": "#f7df71"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    }
+  },
+  "globalVariables": {
+    "globalVariable": 7
+  },
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "first": {
+        "first": {
+          "first": {
+            "first": "RawMessages!1n3j629",
+            "second": "Indicator!241lfwg",
+            "direction": "column",
+            "splitPercentage": 67.12427736603259
+          },
+          "second": {
+            "first": "Gauge!7m2uj6",
+            "second": "Gauge!1wy0071",
+            "direction": "row"
+          },
+          "direction": "column",
+          "splitPercentage": 64.33700328576182
+        },
+        "second": {
+          "first": "Gauge!233tm0n",
+          "second": "Gauge!2fwdvoy",
+          "direction": "row"
+        },
+        "direction": "column",
+        "splitPercentage": 72.55991660136311
+      },
+      "second": {
+        "first": {
+          "first": "Indicator!2z7d1q",
+          "second": "RawMessages!mbh5zq",
+          "direction": "column",
+          "splitPercentage": 34.34906478047881
+        },
+        "second": "map!4ewo5m8",
+        "direction": "column",
+        "splitPercentage": 50.847457560025035
+      },
+      "direction": "column",
+      "splitPercentage": 51.68761213977204
+    },
+    "second": {
+      "first": {
+        "first": "StateTransitions!1qu7tr5",
+        "second": "Indicator!1fvr8r2",
+        "direction": "column",
+        "splitPercentage": 62.00096193123866
+      },
+      "second": "Plot!3lm2vjo",
+      "direction": "column",
+      "splitPercentage": 37.3249550482101
+    },
+    "splitPercentage": 29.681885215396914
+  }
+}
