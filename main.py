@@ -2,6 +2,11 @@
 from datetime import datetime
 import logging
 import os
+from queue import Queue, Empty
+import threading
+from typing import Dict, Optional
+from dataclasses import dataclass
+from threading import Event
 
 # External library imports for lora and foxglove foxglove, logging, etc.
 import cv2
@@ -29,6 +34,64 @@ from Signal_pb2 import Signal
 
 from utils import build_file_descriptor_set, CustomListener
 
+@dataclass
+class ChannelData:
+    queue: Queue
+    stop_event: Event
+    thread: Optional[threading.Thread] = None
+
+def channel_publisher(queue: Queue, channel: Channel, stop_event: Event, name: str) -> None:
+    while not stop_event.is_set():
+        try:
+            data = queue.get(timeout=1.0)
+            channel.log(data)
+        except Empty:
+            continue
+
+def lora_reader(lora: RFM9x, rocket_channels: Dict, stop_event: Event) -> None:
+    while not stop_event.is_set():
+        packet = lora.receive(with_header=True)
+        if packet is not None:
+            print(bytes(packet))
+            try:
+                tom_packet = TomPacket()
+                tom_packet.ParseFromString(packet)
+
+                if tom_packet.rocket_id not in rocket_channels:
+                    continue
+
+                if abs(tom_packet.location.altitude) > 1_000_000:
+                    continue
+
+                # Get the channels for the specific rocket
+                channels = rocket_channels[tom_packet.rocket_id]
+
+                # Queue location data
+                if tom_packet.HasField("location"):
+                    channels["location"]["data"].queue.put(
+                        tom_packet.location.SerializeToString()
+                    )
+
+                # Queue telemetry data
+                channels["telemetry"]["data"].queue.put(bytes(packet))
+
+                # Queue signal data
+                signal_data = Signal(rssi=lora.last_rssi, snr=lora.last_snr)
+                channels["signal"]["data"].queue.put(
+                    signal_data.SerializeToString()
+                )
+            except google.protobuf.message.DecodeError:
+                print("[ERROR] Could not decode packet! Did flight computer shut off?")
+
+def camera_reader(cap: cv2.VideoCapture, image_queue: Queue, stop_event: Event) -> None:
+    while not stop_event.is_set():
+        ret, frame = cap.read()
+        if ret:
+            im_packet = CompressedImage(
+                data=cv2.imencode(".jpeg", frame)[1].tobytes(),
+                format="jpeg"
+            )
+            image_queue.put(im_packet)
 
 def run_telemetry_loop(
     lora: RFM9x,
@@ -37,86 +100,125 @@ def run_telemetry_loop(
     cap: cv2.VideoCapture | None = None,
     rocket_ids: list[str] = [],
 ) -> None:
-    # Create a dictionary to store channels for each rocket
-    rocket_channels = {
-        rocket_id: {
-            "telemetry": Channel(
-                topic=f"/telemetry/{rocket_id}",
-                message_encoding="protobuf",
-                schema=Schema(
-                    name=TomPacket.DESCRIPTOR.full_name,
-                    encoding="protobuf",
-                    data=build_file_descriptor_set(TomPacket).SerializeToString(),
+    # Create a dictionary to store channels and their queues for each rocket
+    rocket_channels: Dict[str, Dict[str, dict]] = {}
+    
+    for rocket_id in rocket_ids:
+        rocket_channels[rocket_id] = {
+            "telemetry": {
+                "channel": Channel(
+                    topic=f"/telemetry/{rocket_id}",
+                    message_encoding="protobuf",
+                    schema=Schema(
+                        name=TomPacket.DESCRIPTOR.full_name,
+                        encoding="protobuf",
+                        data=build_file_descriptor_set(TomPacket).SerializeToString(),
+                    ),
                 ),
-            ),
-            "location": Channel(
-                topic=f"/location/{rocket_id}",
-                message_encoding="protobuf",
-                schema=Schema(
-                    name=LocationFix.DESCRIPTOR.full_name,
-                    encoding="protobuf",
-                    data=build_file_descriptor_set(LocationFix).SerializeToString(),
+                "data": ChannelData(Queue(), Event())
+            },
+            "location": {
+                "channel": Channel(
+                    topic=f"/location/{rocket_id}",
+                    message_encoding="protobuf",
+                    schema=Schema(
+                        name=LocationFix.DESCRIPTOR.full_name,
+                        encoding="protobuf",
+                        data=build_file_descriptor_set(LocationFix).SerializeToString(),
+                    ),
                 ),
-            ),
-            "signal": Channel(
-                topic=f"/signal/{rocket_id}",
-                message_encoding="protobuf",
-                schema=Schema(
-                    name=Signal.DESCRIPTOR.full_name,
-                    encoding="protobuf",
-                    data=build_file_descriptor_set(Signal).SerializeToString(),
+                "data": ChannelData(Queue(), Event())
+            },
+            "signal": {
+                "channel": Channel(
+                    topic=f"/signal/{rocket_id}",
+                    message_encoding="protobuf",
+                    schema=Schema(
+                        name=Signal.DESCRIPTOR.full_name,
+                        encoding="protobuf",
+                        data=build_file_descriptor_set(Signal).SerializeToString(),
+                    ),
                 ),
-            ),
+                "data": ChannelData(Queue(), Event())
+            },
         }
-        for rocket_id in rocket_ids
-    }
+
+    # Start publisher threads for each channel
+    for rocket_id, channels in rocket_channels.items():
+        for channel_name, channel_info in channels.items():
+            thread = threading.Thread(
+                target=channel_publisher,
+                args=(
+                    channel_info["data"].queue,
+                    channel_info["channel"],
+                    channel_info["data"].stop_event,
+                    f"{rocket_id}-{channel_name}"
+                ),
+                name=f"{rocket_id}-{channel_name}-publisher"
+            )
+            channel_info["data"].thread = thread
+            thread.start()
+
+    # Create and start LoRa reader thread
+    lora_stop_event = Event()
+    lora_thread = threading.Thread(
+        target=lora_reader,
+        args=(lora, rocket_channels, lora_stop_event),
+        name="lora-reader"
+    )
+    lora_thread.start()
+
+    # Create image publisher thread if camera is enabled
+    image_queue = None
+    image_stop_event = None
+    camera_stop_event = None
+    if cap is not None and image_channel is not None:
+        image_queue = Queue()
+        image_stop_event = Event()
+        camera_stop_event = Event()
+        
+        # Start image publisher thread
+        image_thread = threading.Thread(
+            target=channel_publisher,
+            args=(image_queue, image_channel, image_stop_event, "image"),
+            name="image-publisher"
+        )
+        image_thread.start()
+        
+        # Start camera reader thread
+        camera_thread = threading.Thread(
+            target=camera_reader,
+            args=(cap, image_queue, camera_stop_event),
+            name="camera-reader"
+        )
+        camera_thread.start()
 
     try:
+        # Main thread just waits for interrupt
         while True:
-            # Get data from LoRa
-            packet = lora.receive(with_header=True)
-
-            if packet is not None:
-                print(bytes(packet))
-                try:
-                    tom_packet = TomPacket()
-                    tom_packet.ParseFromString(packet)
-
-                    if tom_packet.rocket_id not in rocket_channels:
-                        continue
-
-                    if abs(tom_packet.location.altitude) > 1_000_000:
-                        continue
-
-                    # Get the channels for the specific rocket
-                    channels = rocket_channels[tom_packet.rocket_id]
-
-                    # Publish location data to the rocket's location channel
-                    if tom_packet.HasField("location"):
-                        channels["location"].log(tom_packet.location.SerializeToString())
-
-                    # Publish telemetry data to the rocket's telemetry channel
-                    channels["telemetry"].log(bytes(packet))
-
-                    # Publish signal data to the rocket's signal channel
-                    signal_data = Signal(rssi=lora.last_rssi, snr=lora.last_snr)
-                    channels["signal"].log(signal_data.SerializeToString())
-                except google.protobuf.message.DecodeError:
-                    print(
-                        "[ERROR] Could not decode packet! Did flight computer shut off?"
-                    )
-
-            # Get data from Camera
-            if cap is not None and image_channel is not None:
-                ret, frame = cap.read()
-                if ret:
-                    im_packet = CompressedImage(
-                        data=cv2.imencode(".jpeg", frame)[1].tobytes(), format="jpeg"
-                    )
-                    image_channel.log(im_packet)
-
+            threading.Event().wait(1)
+            
     except KeyboardInterrupt:
-        print()
+        print("\nShutting down threads...")
+        # Stop all publisher threads
+        for rocket_id, channels in rocket_channels.items():
+            for channel_info in channels.values():
+                channel_info["data"].stop_event.set()
+                if channel_info["data"].thread:
+                    channel_info["data"].thread.join()
+
+        # Stop LoRa thread
+        lora_stop_event.set()
+        lora_thread.join()
+
+        # Stop camera and image threads if they exist
+        if camera_stop_event:
+            camera_stop_event.set()
+            camera_thread.join()
+        if image_stop_event:
+            image_stop_event.set()
+            image_thread.join()
+
         server.stop()
 
 
