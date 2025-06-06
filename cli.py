@@ -34,6 +34,12 @@ parser.add_argument(
     action="store_true",
     help="enable and disable logging on ground",
 )
+parser.add_argument(
+    "-f",
+    "--flip_camera",
+    action="store_true",
+    help="vertically flip the camera's image"
+)
 
 # Arguments for radio
 parser.add_argument("--spi_bus", default=0, help="Which SPI Bus you're using")

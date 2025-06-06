@@ -2,7 +2,7 @@
 from datetime import datetime
 import logging
 import os
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 import threading
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -68,18 +68,27 @@ def lora_reader(lora: RFM9x, rocket_channels: Dict, stop_event: Event) -> None:
 
                 # Queue location data
                 if tom_packet.HasField("location"):
-                    channels["location"]["data"].queue.put(
-                        tom_packet.location.SerializeToString()
-                    )
+                    try:
+                        channels["location"]["data"].queue.put(
+                            tom_packet.location.SerializeToString(), timeout=0.1
+                        )
+                    except Full:
+                        print(f"[WARNING] Location queue for rocket {tom_packet.rocket_id} is full. Dropping message.")
 
                 # Queue telemetry data
-                channels["telemetry"]["data"].queue.put(bytes(packet))
+                try:
+                    channels["telemetry"]["data"].queue.put(bytes(packet), timeout=0.1)
+                except Full:
+                    print(f"[WARNING] Telemetry queue for rocket {tom_packet.rocket_id} is full. Dropping message.")
 
                 # Queue signal data
                 signal_data = Signal(rssi=lora.last_rssi, snr=lora.last_snr)
-                channels["signal"]["data"].queue.put(
-                    signal_data.SerializeToString()
-                )
+                try:
+                    channels["signal"]["data"].queue.put(
+                        signal_data.SerializeToString(), timeout=0.1
+                    )
+                except Full:
+                    print(f"[WARNING] Signal queue for rocket {tom_packet.rocket_id} is full. Dropping message.")
             except google.protobuf.message.DecodeError:
                 print("[ERROR] Could not decode packet! Did flight computer shut off?")
 
@@ -91,8 +100,12 @@ def camera_reader(cap: cv2.VideoCapture, image_queue: Queue, stop_event: Event) 
                 data=cv2.imencode(".jpeg", frame)[1].tobytes(),
                 format="jpeg"
             )
-            image_queue.put(im_packet)
-
+            try:
+                image_queue.put(im_packet, timeout=0.1)
+            except Full:
+                print("[WARNING] Image queue is full. Dropping frame.")
+                image_queue.pop()
+                image_queue.put(im_packet, timeout=0.1)
 def run_telemetry_loop(
     lora: RFM9x,
     server: WebSocketServer,
